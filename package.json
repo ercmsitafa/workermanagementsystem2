@@ -1,0 +1,16 @@
+{
+  "name": "workers",
+  "version": "1.0.0",
+  "description": "Worker Management System - Full Stack Application",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm run start"
+  }
+}
