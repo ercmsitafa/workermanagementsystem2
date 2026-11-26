@@ -374,9 +374,10 @@ function AttendanceWorkspace({ workers, onNotice }) {
 
   async function saveAttendance() {
     if (!activeWorkers.length) { onNotice('There are no active workers to mark.'); return; }
+    if (activeWorkers.some(worker => !statuses[String(worker.id)])) { onNotice('Select a status for every worker, or use one of the Mark all actions.'); return; }
     setSaving(true);
     try {
-      const payload = activeWorkers.map(worker => ({ worker_id: Number(worker.id), record_status: statuses[String(worker.id)] || 'present' }));
+      const payload = activeWorkers.map(worker => ({ worker_id: Number(worker.id), record_status: statuses[String(worker.id)] }));
       const result = await apiRequest('/attendance/bulk', { method:'POST', body:JSON.stringify({ date, records:payload }) });
       onNotice(result.message || 'Attendance saved.');
       await loadAttendance();
@@ -412,10 +413,10 @@ function AttendanceWorkspace({ workers, onNotice }) {
       <span>{records.length} saved records · {activeWorkers.length} active workers</span>
     </div>
     {loading ? <p className="empty-hint">Loading attendance…</p> : rows.length ? <div className="table-wrap"><table><thead><tr><th>Worker</th><th>Department</th><th>Attendance status</th><th>Record</th></tr></thead><tbody>
-      {rows.map(worker => { const value=statuses[String(worker.id)] || 'present'; const saved=records.some(record=>String(record.worker_id)===String(worker.id)); return <tr key={worker.id}>
+      {rows.map(worker => { const value=statuses[String(worker.id)] || ''; const saved=records.some(record=>String(record.worker_id)===String(worker.id)); return <tr key={worker.id}>
         <td><div className="worker-cell"><div className="worker-avatar">{(worker.first_name||'?').slice(0,1)}{(worker.last_name||'').slice(0,1)}</div><div><b>{worker.first_name} {worker.last_name}</b><small>{worker.email||'—'}</small></div></div></td>
         <td>{worker.department_name||'Unassigned'}</td>
-        <td><select className="attendance-status-select" value={value} onChange={event=>setStatuses(current=>({...current,[String(worker.id)]:event.target.value}))}><option value="present">Present</option><option value="absent">Absent</option><option value="leave">On leave</option></select></td>
+        <td><select className="attendance-status-select" value={value} onChange={event=>setStatuses(current=>({...current,[String(worker.id)]:event.target.value}))}><option value="">Select status</option><option value="present">Present</option><option value="absent">Absent</option><option value="leave">On leave</option></select></td>
         <td><span className={'status-pill '+(saved?'active':'inactive')}><i/>{saved?'Saved':'New'}</span></td>
       </tr>; })}
     </tbody></table></div> : <div className="empty-state"><Users size={26}/><b>No workers match this filter</b><span>Try another search or attendance status.</span></div>}
