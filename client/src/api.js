@@ -26,3 +26,22 @@ export async function signIn(username, password) {
   localStorage.setItem(TOKEN_KEY, data.token);
   return data;
 }
+
+export async function downloadFile(path, filename) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    let message = 'Export failed';
+    try { const payload = await response.json(); message = payload.message || message; } catch {}
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
