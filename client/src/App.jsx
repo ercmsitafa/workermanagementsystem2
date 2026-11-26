@@ -67,6 +67,9 @@ function App() {
   const [workerTotal, setWorkerTotal] = useState(0);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
+  const [positionFilter, setPositionFilter] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('DESC');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -110,7 +113,8 @@ function App() {
     setDashboard(result.data);
   }
   async function loadWorkers() {
-    const params = new URLSearchParams({ page:'1', limit:'100', search:query });
+    const params = new URLSearchParams({ page:'1', limit:'100', search:query, sortBy, sortOrder });
+    if (positionFilter.trim()) params.set('position',positionFilter.trim());
     if (status !== 'all') params.set('status', status);
     const result = await apiRequest('/workers?'+params.toString());
     setWorkers(result.data?.workers || []);
@@ -131,7 +135,7 @@ function App() {
       const timer = setTimeout(() => loadWorkers().catch(err=>setError(err.message)), 250);
       return () => clearTimeout(timer);
     }
-  }, [query, status]);
+  }, [query, status, positionFilter, sortBy, sortOrder]);
   useEffect(() => {
     if (token && page === 'settings' && user?.role === 'admin') loadSettings().catch(err=>setNotice(err.message));
   }, [page, token, user?.role]);
@@ -245,7 +249,7 @@ function App() {
           <article className="panel recent-panel"><div className="panel-heading"><div><h3>Recently added workers</h3><p>Your latest team members</p></div><button className="text-btn" onClick={()=>setPage('workers')}>View all <ArrowUpRight size={15}/></button></div><WorkerTable rows={(dashboard?.recent_workers||[])} compact onView={openWorkerProfile}/></article>
         </>}
 
-        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers} onView={openWorkerProfile} onEdit={worker=>setEditingWorker({...worker,salary:worker.salary??0})}/></article>}
+        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><input className="position-filter" placeholder="Filter position" value={positionFilter} onChange={e=>setPositionFilter(e.target.value}/><select className="sort-select" value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="created_at">Newest</option><option value="first_name">First name</option><option value="last_name">Last name</option><option value="salary">Salary</option><option value="date_hired">Hire date</option></select><button className="secondary-btn sort-direction" onClick={()=>setSortOrder(o=>o==='ASC'?'DESC':'ASC')}>{sortOrder==='ASC'?'Ascending ↑':'Descending ↓'}</button><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers} onView={openWorkerProfile} onEdit={worker=>setEditingWorker({...worker,salary:worker.salary??0})}/></article>}
 
         {page==='departments'&&<article className="panel"><div className="panel-heading"><div><h3>Departments</h3><p>Workforce distribution across your organization</p></div></div><div className="department-cards">{(dashboard?.departments||[]).map(d=><div className="department-card" key={d.name}><Building2/><b>{d.name}</b><strong>{d.worker_count}</strong><small>Active workers</small></div>)}</div>{!dashboard?.departments?.length&&<p className="empty-hint">No department data available yet.</p>}</article>}
 
