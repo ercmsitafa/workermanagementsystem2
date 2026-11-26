@@ -102,7 +102,17 @@ router.post('/init', verifyToken, authorize('admin'), async (req, res) => {
       ['require_approval_leave', 'true', 'boolean'],
       ['max_leave_balance', '30', 'number'],
       ['maintenance_mode', 'false', 'boolean'],
-      ['allow_worker_self_registration', 'false', 'boolean']
+      ['allow_worker_self_registration', 'false', 'boolean'],
+      ['auto_refresh', 'false', 'boolean'],
+      ['company_email', '', 'string'],
+      ['company_phone', '', 'string'],
+      ['company_address', '', 'string'],
+      ['payroll_period', 'monthly', 'string'],
+      ['overtime_enabled', 'false', 'boolean'],
+      ['notifications_email', 'true', 'boolean'],
+      ['notifications_in_app', 'true', 'boolean'],
+      ['audit_retention_days', '365', 'number'],
+      ['backup_frequency', 'weekly', 'string']
     ];
     for (const [key, value, type] of defaults) {
       const existing = await getSingleRow('SELECT id FROM settings WHERE key = ?', [key]);
