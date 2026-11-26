@@ -3,7 +3,7 @@ import {
   Activity, Bell, BriefcaseBusiness, CalendarCheck, ChartNoAxesCombined, Download,
   Check, ChevronDown, CircleHelp, Clock3, Command, FileBarChart, LayoutDashboard,
   LogOut, Menu, Moon, Plus, Search, Settings, ShieldCheck, Sun, Users, Wallet,
-  X, RefreshCw, ArrowUpRight, Building2, SlidersHorizontal, Sparkles
+  X, RefreshCw, ArrowUpRight, Building2, SlidersHorizontal, Sparkles, Eye, Pencil, UserRound
 } from 'lucide-react';
 import { apiRequest, downloadFile, getToken, signIn, signOut } from './api';
 
@@ -70,6 +70,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [editingWorker, setEditingWorker] = useState(null);
+  const [profileWorker, setProfileWorker] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('wms_theme') !== 'light');
   const [notice, setNotice] = useState('');
@@ -159,6 +162,24 @@ function App() {
     catch (err) { setNotice(err.message || 'Export failed'); }
     finally { setExportBusy(false); }
   }
+  async function openWorkerProfile(worker) {
+    setProfileLoading(true); setProfileWorker({ ...worker, loading:true });
+    try { const result = await apiRequest('/workers/'+worker.id); setProfileWorker(result.data); }
+    catch (err) { setNotice(err.message || 'Could not load worker profile'); setProfileWorker(null); }
+    finally { setProfileLoading(false); }
+  }
+  async function saveWorkerEdit(event) {
+    event.preventDefault();
+    try {
+      await apiRequest('/workers/'+editingWorker.id, { method:'PUT', body:JSON.stringify({
+        first_name:editingWorker.first_name, last_name:editingWorker.last_name,
+        email:editingWorker.email, phone:editingWorker.phone, address:editingWorker.address,
+        position:editingWorker.position, salary:Number(editingWorker.salary||0), status:editingWorker.status
+      })});
+      setEditingWorker(null); setNotice('Worker profile updated.');
+      await Promise.all([loadWorkers(),loadDashboard()]);
+    } catch(err) { setNotice(err.message||'Unable to update worker'); }
+  }
   async function createWorker(event) {
     event.preventDefault();
     try {
@@ -221,10 +242,10 @@ function App() {
               {!dashboard?.departments?.length&&<p className="empty-hint">Department information will appear here.</p>}
             </article>
           </div>
-          <article className="panel recent-panel"><div className="panel-heading"><div><h3>Recently added workers</h3><p>Your latest team members</p></div><button className="text-btn" onClick={()=>setPage('workers')}>View all <ArrowUpRight size={15}/></button></div><WorkerTable rows={(dashboard?.recent_workers||[])} compact/></article>
+          <article className="panel recent-panel"><div className="panel-heading"><div><h3>Recently added workers</h3><p>Your latest team members</p></div><button className="text-btn" onClick={()=>setPage('workers')}>View all <ArrowUpRight size={15}/></button></div><WorkerTable rows={(dashboard?.recent_workers||[])} compact onView={openWorkerProfile}/></article>
         </>}
 
-        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers}/></article>}
+        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers} onView={openWorkerProfile} onEdit={worker=>setEditingWorker({...worker,salary:worker.salary??0})}/></article>}
 
         {page==='departments'&&<article className="panel"><div className="panel-heading"><div><h3>Departments</h3><p>Workforce distribution across your organization</p></div></div><div className="department-cards">{(dashboard?.departments||[]).map(d=><div className="department-card" key={d.name}><Building2/><b>{d.name}</b><strong>{d.worker_count}</strong><small>Active workers</small></div>)}</div>{!dashboard?.departments?.length&&<p className="empty-hint">No department data available yet.</p>}</article>}
 
@@ -240,6 +261,8 @@ function App() {
     </main>
 
     {mobileNav&&<button className="mobile-scrim" onClick={()=>setMobileNav(false)} aria-label="Close navigation"/>}
+    {editingWorker&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingWorker(null);}}><form className="modal-card" onSubmit={saveWorkerEdit}><div className="modal-heading"><div><span className="eyebrow">EMPLOYEE MANAGEMENT</span><h2>Edit worker</h2></div><button type="button" className="icon-btn" onClick={()=>setEditingWorker(null)}><X/></button></div><div className="form-grid">{[['first_name','First name'],['last_name','Last name'],['email','Email address'],['phone','Phone number'],['address','Address'],['position','Job position'],['salary','Salary (RWF)']].map(([key,label])=><label key={key}>{label}<input required={['first_name','last_name','email'].includes(key)} type={key==='email'?'email':key==='salary'?'number':'text'} min={key==='salary'?'0':undefined} value={editingWorker[key]??''} onChange={e=>setEditingWorker({...editingWorker,[key]:e.target.value})}/></label>)}</div><label>Status<select value={editingWorker.status||'active'} onChange={e=>setEditingWorker({...editingWorker,status:e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option></select></label><div className="modal-actions"><button type="button" className="secondary-btn" onClick={()=>setEditingWorker(null)}>Cancel</button><button className="primary-btn"><Check size={16}/> Save changes</button></div></form></div>}
+    {profileWorker&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setProfileWorker(null);}}><section className="modal-card profile-modal"><div className="modal-heading"><div><span className="eyebrow">EMPLOYEE PROFILE</span><h2>{profileWorker.first_name} {profileWorker.last_name}</h2></div><button className="icon-btn" onClick={()=>setProfileWorker(null)}><X/></button></div><div className="profile-hero"><div className="worker-avatar large-avatar"><UserRound/></div><div><h3>{profileWorker.first_name} {profileWorker.last_name}</h3><p>{profileWorker.position||'Position not set'} · {profileWorker.department_name||'Unassigned department'}</p><span className={'status-pill '+(profileWorker.status||'active')}><i/>{profileWorker.status||'active'}</span></div></div>{profileLoading?<p className="muted">Loading profile…</p>:<><div className="profile-details-grid">{[['Email',profileWorker.email],['Phone',profileWorker.phone],['Address',profileWorker.address],['Salary',money(profileWorker.salary)],['Date hired',profileWorker.date_hired?new Date(profileWorker.date_hired).toLocaleDateString():'—'],['Worker ID',profileWorker.id]].map(([label,value])=><div key={label}><small>{label}</small><b>{value||'—'}</b></div>)}</div><h4>Recent attendance</h4>{profileWorker.recent_attendance?.length?<div className="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Check in</th><th>Check out</th></tr></thead><tbody>{profileWorker.recent_attendance.map((a,i)=><tr key={a.id||i}><td>{a.date||'—'}</td><td>{a.status||'—'}</td><td>{a.check_in||'—'}</td><td>{a.check_out||'—'}</td></tr>)}</tbody></table></div>:<p className="empty-hint">No attendance records found.</p>}<h4>Salary history</h4>{profileWorker.salary_history?.length?<div className="table-wrap"><table><thead><tr><th>Month</th><th>Base</th><th>Net</th></tr></thead><tbody>{profileWorker.salary_history.map((s,i)=><tr key={s.id||i}><td>{s.month||'—'}</td><td>{money(s.base_salary??s.salary)}</td><td>{money(s.net_salary??s.net)}</td></tr>)}</tbody></table></div>:<p className="empty-hint">No salary history found.</p>}</>}</section></div>}
     {showAdd&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowAdd(false);}}><form className="modal-card" onSubmit={createWorker}><div className="modal-heading"><div><span className="eyebrow">TEAM MANAGEMENT</span><h2>Add a worker</h2></div><button type="button" className="icon-btn" onClick={()=>setShowAdd(false)}><X/></button></div><div className="form-grid">{[['first_name','First name'],['last_name','Last name'],['email','Email address'],['phone','Phone number'],['position','Job position'],['salary','Salary (RWF)']].map(([key,label])=><label key={key}>{label}<input required={['first_name','last_name','email'].includes(key)} type={key==='email'?'email':key==='salary'?'number':'text'} min={key==='salary'?'0':undefined} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} placeholder={label}/></label>)}</div><label>Status<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option></select></label><div className="modal-actions"><button type="button" className="secondary-btn" onClick={()=>setShowAdd(false)}>Cancel</button><button className="primary-btn"><Plus size={16}/> Save worker</button></div></form></div>}
   </div>;
 }
@@ -282,9 +305,9 @@ function SettingsPage({ dark, setDark, user, settings, setSettings, settingsLoad
   </article>;
 }
 
-function WorkerTable({ rows, compact=false }) {
+function WorkerTable({ rows, compact=false, onView, onEdit }) {
   if (!rows?.length) return <div className="empty-state"><Users size={28}/><b>No worker records to show</b><span>When workers are available, they will appear here.</span></div>;
-  return <div className="table-wrap"><table><thead><tr><th>Worker</th><th>Position</th><th>Department</th><th>Status</th>{!compact&&<th>Email</th>}</tr></thead><tbody>{rows.map((w,i)=><tr key={w.id||i}><td><div className="worker-cell"><div className="worker-avatar">{(w.first_name||'?').slice(0,1)}{(w.last_name||'').slice(0,1)}</div><div><b>{w.first_name} {w.last_name}</b><small>{w.email||'—'}</small></div></div></td><td>{w.position||'—'}</td><td>{w.department_name||'Unassigned'}</td><td><span className={'status-pill '+((w.status||'active').toLowerCase())}><i/>{w.status||'active'}</span></td>{!compact&&<td>{w.email||'—'}</td>}</tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table><thead><tr><th>Worker</th><th>Position</th><th>Department</th><th>Status</th>{!compact&&<th>Email</th>}<th>Actions</th></tr></thead><tbody>{rows.map((w,i)=><tr key={w.id||i}><td><div className="worker-cell"><div className="worker-avatar">{(w.first_name||'?').slice(0,1)}{(w.last_name||'').slice(0,1)}</div><div><b>{w.first_name} {w.last_name}</b><small>{w.email||'—'}</small></div></div></td><td>{w.position||'—'}</td><td>{w.department_name||'Unassigned'}</td><td><span className={'status-pill '+((w.status||'active').toLowerCase())}><i/>{w.status||'active'}</span></td>{!compact&&<td>{w.email||'—'}</td>}<td><div className="table-actions"><button title="View profile" onClick={()=>onView?.(w)}><Eye size={15}/></button>{!compact&&<button title="Edit worker" onClick={()=>onEdit?.(w)}><Pencil size={15}/></button>}</div></td></tr>)}</tbody></table></div>;
 }
 
 export default App;
