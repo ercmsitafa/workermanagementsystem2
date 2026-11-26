@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Bell, BriefcaseBusiness, CalendarCheck, ChartNoAxesCombined,
+  Activity, Bell, BriefcaseBusiness, CalendarCheck, ChartNoAxesCombined, Download,
   Check, ChevronDown, CircleHelp, Clock3, Command, FileBarChart, LayoutDashboard,
   LogOut, Menu, Moon, Plus, Search, Settings, ShieldCheck, Sun, Users, Wallet,
   X, RefreshCw, ArrowUpRight, Building2, SlidersHorizontal, Sparkles
 } from 'lucide-react';
-import { apiRequest, getToken, signIn, signOut } from './api';
+import { apiRequest, downloadFile, getToken, signIn, signOut } from './api';
 
 const navigation = [
   { label: 'Overview', icon: LayoutDashboard, key: 'overview' },
@@ -76,6 +76,7 @@ function App() {
   const [settingsState, setSettingsState] = useState({});
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [form, setForm] = useState({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active' });
 
   async function loadUser() {
@@ -146,6 +147,18 @@ function App() {
     setUser(data.user); setToken(data.token);
   }
   function handleLogout() { signOut(); setToken(null); setUser(null); setDashboard(null); }
+  async function exportWorkers() {
+    setExportBusy(true);
+    try { await downloadFile('/export/workers/excel', 'workers.xlsx'); setNotice('Worker export downloaded.'); }
+    catch (err) { setNotice(err.message || 'Export failed'); }
+    finally { setExportBusy(false); }
+  }
+  async function exportSummary() {
+    setExportBusy(true);
+    try { await downloadFile('/export/report/pdf?type=summary', 'workforce-summary.pdf'); setNotice('PDF report downloaded.'); }
+    catch (err) { setNotice(err.message || 'Export failed'); }
+    finally { setExportBusy(false); }
+  }
   async function createWorker(event) {
     event.preventDefault();
     try {
@@ -211,7 +224,7 @@ function App() {
           <article className="panel recent-panel"><div className="panel-heading"><div><h3>Recently added workers</h3><p>Your latest team members</p></div><button className="text-btn" onClick={()=>setPage('workers')}>View all <ArrowUpRight size={15}/></button></div><WorkerTable rows={(dashboard?.recent_workers||[])} compact/></article>
         </>}
 
-        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><span className="results-count">{workerTotal} workers</span></div><WorkerTable rows={visibleWorkers}/></article>}
+        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers}/></article>}
 
         {page==='departments'&&<article className="panel"><div className="panel-heading"><div><h3>Departments</h3><p>Workforce distribution across your organization</p></div></div><div className="department-cards">{(dashboard?.departments||[]).map(d=><div className="department-card" key={d.name}><Building2/><b>{d.name}</b><strong>{d.worker_count}</strong><small>Active workers</small></div>)}</div>{!dashboard?.departments?.length&&<p className="empty-hint">No department data available yet.</p>}</article>}
 
@@ -219,7 +232,7 @@ function App() {
 
         {page==='salaries'&&<article className="panel"><div className="panel-heading"><div><h3>Salary overview</h3><p>Current month totals from dashboard records</p></div><Wallet/></div><div className="stats-grid inner-stats"><StatCard title="Base salary" value={dashboard?.salaries?.total_base!=null?money(dashboard.salaries.total_base):'—'} note="Monthly base total" icon={Wallet} tone="blue"/><StatCard title="Deductions" value={dashboard?.salaries?.total_deductions!=null?money(dashboard.salaries.total_deductions):'—'} note="Recorded deductions" icon={Activity} tone="orange"/><StatCard title="Net salary" value={dashboard?.salaries?.total_net!=null?money(dashboard.salaries.total_net):'—'} note="Monthly net total" icon={BriefcaseBusiness} tone="green"/></div></article>}
 
-        {page==='reports'&&<article className="panel"><div className="panel-heading"><div><h3>Workforce reports</h3><p>Summary of available dashboard metrics</p></div><FileBarChart/></div><div className="report-list"><div><span>Registered workers</span><b>{stats.total??'—'}</b></div><div><span>Active workers</span><b>{stats.active??'—'}</b></div><div><span>Attendance rate</span><b>{attendancePct}%</b></div><div><span>Average salary</span><b>{stats.avg_salary!=null?money(stats.avg_salary):'—'}</b></div></div><p className="muted">Detailed report exports can be connected to the existing export endpoints in the next integration pass.</p></article>}
+        {page==='reports'&&<article className="panel"><div className="panel-heading"><div><h3>Workforce reports</h3><p>Summary of available dashboard metrics</p></div><FileBarChart/></div><div className="report-actions"><button className="secondary-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={16}/> Export workers (Excel)</button><button className="primary-btn" onClick={exportSummary} disabled={exportBusy}><Download size={16}/> Export summary (PDF)</button></div><div className="report-list"><div><span>Registered workers</span><b>{stats.total??'—'}</b></div><div><span>Active workers</span><b>{stats.active??'—'}</b></div><div><span>Attendance rate</span><b>{attendancePct}%</b></div><div><span>Average salary</span><b>{stats.avg_salary!=null?money(stats.avg_salary):'—'}</b></div></div><p className="muted">Detailed report exports can be connected to the existing export endpoints in the next integration pass.</p></article>}
 
         {page==='settings'&&<SettingsPage dark={dark} setDark={setDark} user={user} settings={settingsState} setSettings={setSettingsState} settingsLoading={settingsLoading} saveSettings={saveSettings} loadSettings={loadSettings} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}/ >}
         <footer className="page-footer"><span>Workforce Management System</span><span>Built to help your team work smarter.</span></footer>
