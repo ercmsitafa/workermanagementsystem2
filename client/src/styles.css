@@ -8,3 +8,5 @@
 
 .admin-settings-form{display:grid;gap:24px;margin-top:24px}.settings-section{border-top:1px solid var(--line);padding-top:20px}.settings-section h4{font:700 14px Manrope;margin:0 0 5px}.settings-section p{font-size:11px;color:var(--muted);margin:0 0 16px}.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.settings-grid label{display:grid;gap:7px;color:var(--muted);font-size:11px;font-weight:600}.settings-grid input,.settings-grid select{height:40px;width:100%;border:1px solid var(--line);border-radius:9px;padding:0 11px;background:var(--surface2);color:var(--text);font-size:12px}.compact-setting{padding:11px 0}.settings-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}.settings-actions button{min-width:145px}
 @media(max-width:600px){.settings-grid{grid-template-columns:1fr}.settings-actions button{flex:1}}
+
+.report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}.export-btn{white-space:nowrap}.toolbar .secondary-btn{font-size:11px;padding:9px 11px}
