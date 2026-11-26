@@ -73,11 +73,33 @@ function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('wms_theme') !== 'light');
   const [notice, setNotice] = useState('');
+  const [settingsState, setSettingsState] = useState({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [form, setForm] = useState({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active' });
 
   async function loadUser() {
     const result = await apiRequest('/auth/me');
     setUser(result.data);
+  }
+  async function loadSettings() {
+    setSettingsLoading(true);
+    try {
+      await apiRequest('/settings/init', { method:'POST' });
+      const result = await apiRequest('/settings');
+      setSettingsState(result.data || {});
+      setAutoRefresh(Boolean(result.data?.auto_refresh));
+    } finally { setSettingsLoading(false); }
+  }
+  async function saveSettings(values) {
+    const entries = Object.entries(values);
+    for (const [key, value] of entries) {
+      const type = typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : 'string';
+      await apiRequest('/settings', { method:'PUT', body:JSON.stringify({ key, value, type }) });
+    }
+    setSettingsState(values);
+    setAutoRefresh(Boolean(values.auto_refresh));
+    setNotice('Settings saved successfully.');
   }
   async function loadDashboard() {
     const result = await apiRequest('/dashboard');
@@ -106,6 +128,14 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [query, status]);
+  useEffect(() => {
+    if (token && page === 'settings' && user?.role === 'admin') loadSettings().catch(err=>setNotice(err.message));
+  }, [page, token, user?.role]);
+  useEffect(() => {
+    if (!token || !autoRefresh) return;
+    const timer = setInterval(() => refresh(), 60000);
+    return () => clearInterval(timer);
+  }, [token, autoRefresh]);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
     localStorage.setItem('wms_theme', dark ? 'dark' : 'light');
@@ -191,7 +221,7 @@ function App() {
 
         {page==='reports'&&<article className="panel"><div className="panel-heading"><div><h3>Workforce reports</h3><p>Summary of available dashboard metrics</p></div><FileBarChart/></div><div className="report-list"><div><span>Registered workers</span><b>{stats.total??'—'}</b></div><div><span>Active workers</span><b>{stats.active??'—'}</b></div><div><span>Attendance rate</span><b>{attendancePct}%</b></div><div><span>Average salary</span><b>{stats.avg_salary!=null?money(stats.avg_salary):'—'}</b></div></div><p className="muted">Detailed report exports can be connected to the existing export endpoints in the next integration pass.</p></article>}
 
-        {page==='settings'&&<article className="panel settings-panel"><div className="panel-heading"><div><h3>Workspace preferences</h3><p>Personalize how the dashboard looks and behaves.</p></div><Settings/></div><div className="setting-row"><div><b>Dark appearance</b><small>Use the darker dashboard theme.</small></div><button className={'toggle '+(dark?'on':'')} onClick={()=>setDark(v=>!v)} aria-label="Toggle dark appearance"><i/></button></div><div className="setting-row"><div><b>Automatic refresh</b><small>Refresh dashboard data manually using the refresh button.</small></div><span className="soft-tag">Manual</span></div><div className="setting-row"><div><b>Signed in as</b><small>{user?.email||user?.username||'Authenticated user'} · {user?.role||'member'}</small></div><ShieldCheck className="success-icon"/></div><div className="setting-row"><div><b>API connection</b><small>Dashboard data is loaded from your existing backend.</small></div><span className="soft-tag">Connected when data loads</span></div></article>}
+        {page==='settings'&&<SettingsPage dark={dark} setDark={setDark} user={user} settings={settingsState} setSettings={setSettingsState} settingsLoading={settingsLoading} saveSettings={saveSettings} loadSettings={loadSettings} autoRefresh={autoRefresh} setAutoRefresh={setAutoRefresh}/ >}
         <footer className="page-footer"><span>Workforce Management System</span><span>Built to help your team work smarter.</span></footer>
       </section>
     </main>
@@ -199,6 +229,44 @@ function App() {
     {mobileNav&&<button className="mobile-scrim" onClick={()=>setMobileNav(false)} aria-label="Close navigation"/>}
     {showAdd&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowAdd(false);}}><form className="modal-card" onSubmit={createWorker}><div className="modal-heading"><div><span className="eyebrow">TEAM MANAGEMENT</span><h2>Add a worker</h2></div><button type="button" className="icon-btn" onClick={()=>setShowAdd(false)}><X/></button></div><div className="form-grid">{[['first_name','First name'],['last_name','Last name'],['email','Email address'],['phone','Phone number'],['position','Job position'],['salary','Salary (RWF)']].map(([key,label])=><label key={key}>{label}<input required={['first_name','last_name','email'].includes(key)} type={key==='email'?'email':key==='salary'?'number':'text'} min={key==='salary'?'0':undefined} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} placeholder={label}/></label>)}</div><label>Status<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option></select></label><div className="modal-actions"><button type="button" className="secondary-btn" onClick={()=>setShowAdd(false)}>Cancel</button><button className="primary-btn"><Plus size={16}/> Save worker</button></div></form></div>}
   </div>;
+}
+
+function SettingsPage({ dark, setDark, user, settings, setSettings, settingsLoading, saveSettings, loadSettings, autoRefresh, setAutoRefresh }) {
+  const [draft, setDraft] = useState(settings);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setDraft(settings), [settings]);
+  const isAdmin = user?.role === 'admin';
+  const change = (key, value) => setDraft(current => ({ ...current, [key]: value }));
+  async function submit(event) {
+    event.preventDefault(); setSaving(true);
+    try { await saveSettings(draft); }
+    catch (error) { alert(error.message || 'Could not save settings'); }
+    finally { setSaving(false); }
+  }
+  return <article className="panel settings-panel">
+    <div className="panel-heading"><div><h3>System control center</h3><p>Organization profile, operational rules, appearance and live workspace preferences.</p></div><Settings/></div>
+    <div className="setting-row"><div><b>Dark appearance</b><small>Applies immediately across the workspace.</small></div><button className={'toggle '+(dark?'on':'')} onClick={()=>setDark(v=>!v)} aria-label="Toggle dark appearance"><i/></button></div>
+    <div className="setting-row"><div><b>Automatic dashboard refresh</b><small>Refresh statistics every minute while the session is open.</small></div><button className={'toggle '+(autoRefresh?'on':'')} onClick={()=>setAutoRefresh(v=>{const next=!v;setDraft(prev=>({...prev,auto_refresh:next}));return next;}} aria-label="Toggle automatic refresh"><i/></button></div>
+    <div className="setting-row"><div><b>Account & access</b><small>{user?.email||user?.username||'Authenticated user'} · {user?.role||'member'}</small></div><ShieldCheck className="success-icon"/></div>
+    {isAdmin ? <form className="admin-settings-form" onSubmit={submit}>
+      <div className="settings-section"><div><h4>Organization profile</h4><p>Brand and contact details used across the system.</p></div><div className="settings-grid">
+        <label>Organization name<input value={draft.company_name||''} onChange={e=>change('company_name',e.target.value)} placeholder="Company name"/></label>
+        <label>Contact email<input type="email" value={draft.company_email||''} onChange={e=>change('company_email',e.target.value)} placeholder="hr@company.com"/></label>
+        <label>Contact phone<input value={draft.company_phone||''} onChange={e=>change('company_phone',e.target.value)} placeholder="+250…"/></label>
+        <label>Location / address<input value={draft.company_address||''} onChange={e=>change('company_address',e.target.value)} placeholder="Organization address"/></label>
+      </div></div>
+      <div className="settings-section"><div><h4>Work rules</h4><p>Set baseline values used by HR workflows.</p></div><div className="settings-grid">
+        <label>Daily working hours<input type="number" min="1" max="24" value={draft.working_hours??8} onChange={e=>change('working_hours',Number(e.target.value))}/></label>
+        <label>Annual leave days<input type="number" min="0" max="365" value={draft.leave_annual_default??15} onChange={e=>change('leave_annual_default',Number(e.target.value))}/></label>
+        <label>Sick leave days<input type="number" min="0" max="365" value={draft.leave_sick_default??10} onChange={e=>change('leave_sick_default',Number(e.target.value))}/></label>
+        <label>Currency<select value={draft.currency||'RWF'} onChange={e=>change('currency',e.target.value)}><option>RWF</option><option>USD</option><option>EUR</option><option>GBP</option></select></label>
+        <label>Date format<select value={draft.date_format||'YYYY-MM-DD'} onChange={e=>change('date_format',e.target.value)}><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option></select></label>
+        <label>Max leave balance<input type="number" min="0" value={draft.max_leave_balance??30} onChange={e=>change('max_leave_balance',Number(e.target.value))}/></label>
+      </div></div>
+      <div className="settings-section"><div><h4>Policies & notifications</h4><p>Control workflow options and operational safety.</p></div>{[['weekend_work','Allow weekend work'],['attendance_auto_mark','Automatic attendance marking'],['require_approval_leave','Require leave approval'],['allow_worker_self_registration','Allow worker self-registration'],['maintenance_mode','Maintenance mode']].map(([key,label])=><div className="setting-row compact-setting" key={key}><div><b>{label}</b><small>{key==='maintenance_mode'?'Restrict normal usage during planned maintenance.':'Configure this system workflow option.'}</small></div><button type="button" className={'toggle '+(Boolean(draft[key])?'on':'')} onClick={()=>change(key,!Boolean(draft[key]))} aria-label={label}><i/></button></div>)}</div>
+      <div className="settings-actions"><button type="button" className="secondary-btn" onClick={()=>loadSettings()} disabled={settingsLoading}>Reset to saved <RefreshCw size={15}/></button><button className="primary-btn" disabled={saving||settingsLoading}>{saving?'Saving…':'Save system settings'} <Check size={16}/></button></div>
+    </form> : <div className="empty-state"><ShieldCheck/><b>Administrator permissions required</b><span>Only administrators can change organization-wide settings.</span></div>}
+  </article>;
 }
 
 function WorkerTable({ rows, compact=false }) {
