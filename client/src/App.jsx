@@ -206,6 +206,27 @@ function App() {
   const visibleWorkers = useMemo(() => workers, [workers]);
   const visibleDepartments = useMemo(()=>departments.filter(d=>String(d.name||'').toLowerCase().includes(departmentQuery.toLowerCase())),[departments,departmentQuery]);
   const stats = dashboard?.workers || {};
+  async function saveDepartment(event) {
+    event.preventDefault();
+    try {
+      if (departmentModal.id) await apiRequest('/departments/'+departmentModal.id,{method:'PUT',body:JSON.stringify({name:departmentModal.name,description:departmentModal.description})});
+      else await apiRequest('/departments',{method:'POST',body:JSON.stringify({name:departmentModal.name,description:departmentModal.description})});
+      setDepartmentModal(null);setNotice('Department saved.');
+      await Promise.all([loadDepartments(),loadDashboard()]);
+    } catch(err) { setNotice(err.message||'Could not save department'); }
+  }
+  async function openDepartment(department) {
+    try {
+      const [detail,stats]=await Promise.all([apiRequest('/departments/'+department.id),apiRequest('/departments/'+department.id+'/stats')]);
+      setDepartmentDetail({...detail.data,stats:stats.data});
+    } catch(err) { setNotice(err.message||'Could not load department details'); }
+  }
+  async function deleteDepartment(department) {
+    if(!window.confirm('Delete department '+department.name+'?'))return;
+    try { await apiRequest('/departments/'+department.id,{method:'DELETE'});setNotice('Department deleted.');await Promise.all([loadDepartments(),loadDashboard()]); }
+    catch(err) { setNotice(err.message||'Could not delete department'); }
+  }
+
   const attendance = dashboard?.today_attendance || {};
   const attendancePct = Number(dashboard?.attendance_rate?.rate || 0);
   const title = navigation.find(item=>item.key===page)?.label || 'Settings';
