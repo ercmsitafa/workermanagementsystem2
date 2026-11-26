@@ -64,6 +64,10 @@ function App() {
   const [page, setPage] = useState('overview');
   const [dashboard, setDashboard] = useState(null);
   const [workers, setWorkers] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [departmentQuery, setDepartmentQuery] = useState('');
+  const [departmentModal, setDepartmentModal] = useState(null);
+  const [departmentDetail, setDepartmentDetail] = useState(null);
   const [workerTotal, setWorkerTotal] = useState(0);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -83,7 +87,7 @@ function App() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
-  const [form, setForm] = useState({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active' });
+  const [form, setForm] = useState({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active', department_id:'' });
 
   async function loadUser() {
     const result = await apiRequest('/auth/me');
@@ -108,6 +112,7 @@ function App() {
     setAutoRefresh(Boolean(values.auto_refresh));
     setNotice('Settings saved successfully.');
   }
+  async function loadDepartments() { const result=await apiRequest('/departments?limit=100'); setDepartments(result.data?.departments||[]); }
   async function loadDashboard() {
     const result = await apiRequest('/dashboard');
     setDashboard(result.data);
@@ -125,7 +130,7 @@ function App() {
     setLoading(true); setError('');
     try {
       await loadUser();
-      await Promise.all([loadDashboard(), loadWorkers()]);
+      await Promise.all([loadDashboard(), loadWorkers(), loadDepartments()]);
     } catch (err) { setError(err.message || 'Could not load data'); }
     finally { setLoading(false); }
   }
@@ -136,6 +141,7 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [query, status, positionFilter, sortBy, sortOrder]);
+  useEffect(() => { if(token && page==='departments') loadDepartments().catch(err=>setNotice(err.message)); },[page,token]);
   useEffect(() => {
     if (token && page === 'settings' && user?.role === 'admin') loadSettings().catch(err=>setNotice(err.message));
   }, [page, token, user?.role]);
@@ -178,7 +184,7 @@ function App() {
       await apiRequest('/workers/'+editingWorker.id, { method:'PUT', body:JSON.stringify({
         first_name:editingWorker.first_name, last_name:editingWorker.last_name,
         email:editingWorker.email, phone:editingWorker.phone, address:editingWorker.address,
-        position:editingWorker.position, salary:Number(editingWorker.salary||0), status:editingWorker.status
+        position:editingWorker.position, department_id:editingWorker.department_id||null, salary:Number(editingWorker.salary||0), status:editingWorker.status
       })});
       setEditingWorker(null); setNotice('Worker profile updated.');
       await Promise.all([loadWorkers(),loadDashboard()]);
@@ -188,16 +194,17 @@ function App() {
     event.preventDefault();
     try {
       await apiRequest('/workers', { method:'POST', body:JSON.stringify({
-        ...form, salary:Number(form.salary || 0)
+        ...form, department_id:form.department_id||null, salary:Number(form.salary || 0)
       })});
       setShowAdd(false);
-      setForm({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active' });
+      setForm({ first_name:'', last_name:'', email:'', phone:'', position:'', salary:'', status:'active', department_id:'' });
       setNotice('Worker added successfully');
       await Promise.all([loadWorkers(), loadDashboard()]);
     } catch (err) { setNotice(err.message); }
   }
 
   const visibleWorkers = useMemo(() => workers, [workers]);
+  const visibleDepartments = useMemo(()=>departments.filter(d=>String(d.name||'').toLowerCase().includes(departmentQuery.toLowerCase())),[departments,departmentQuery]);
   const stats = dashboard?.workers || {};
   const attendance = dashboard?.today_attendance || {};
   const attendancePct = Number(dashboard?.attendance_rate?.rate || 0);
@@ -249,7 +256,7 @@ function App() {
           <article className="panel recent-panel"><div className="panel-heading"><div><h3>Recently added workers</h3><p>Your latest team members</p></div><button className="text-btn" onClick={()=>setPage('workers')}>View all <ArrowUpRight size={15}/></button></div><WorkerTable rows={(dashboard?.recent_workers||[])} compact onView={openWorkerProfile}/></article>
         </>}
 
-        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><input className="position-filter" placeholder="Filter position" value={positionFilter} onChange={e=>setPositionFilter(e.target.value)}/><select className="sort-select" value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="created_at">Newest</option><option value="first_name">First name</option><option value="last_name">Last name</option><option value="salary">Salary</option><option value="date_hired">Hire date</option></select><button className="secondary-btn sort-direction" onClick={()=>setSortOrder(o=>o==='ASC'?'DESC':'ASC')}>{sortOrder==='ASC'?'Ascending ↑':'Descending ↓'}</button><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers} onView={openWorkerProfile} onEdit={worker=>setEditingWorker({...worker,salary:worker.salary??0})}/></article>}
+        {page==='workers'&&<article className="panel workers-panel"><div className="toolbar"><div className="search-box"><Search size={17}/><input placeholder="Search name, email or phone…" value={query} onChange={e=>setQuery(e.target.value)}/>{query&&<button onClick={()=>setQuery('')}><X size={14}/></button>}</div><div className="filter-control"><SlidersHorizontal size={16}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select></div><input className="position-filter" placeholder="Filter position" value={positionFilter} onChange={e=>setPositionFilter(e.target.value)}/><select className="sort-select" value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="created_at">Newest</option><option value="first_name">First name</option><option value="last_name">Last name</option><option value="salary">Salary</option><option value="date_hired">Hire date</option></select><button className="secondary-btn sort-direction" onClick={()=>setSortOrder(o=>o==='ASC'?'DESC':'ASC')}>{sortOrder==='ASC'?'Ascending ↑':'Descending ↓'}</button><span className="results-count">{workerTotal} workers</span><button className="secondary-btn export-btn" onClick={exportWorkers} disabled={exportBusy}><Download size={15}/>{exportBusy?'Preparing…':'Export Excel'}</button></div><WorkerTable rows={visibleWorkers} onView={openWorkerProfile} onEdit={worker=>setEditingWorker({...worker,salary:worker.salary??0,department_id:worker.department_id??''})}/></article>}
 
         {page==='departments'&&<article className="panel"><div className="panel-heading"><div><h3>Departments</h3><p>Workforce distribution across your organization</p></div></div><div className="department-cards">{(dashboard?.departments||[]).map(d=><div className="department-card" key={d.name}><Building2/><b>{d.name}</b><strong>{d.worker_count}</strong><small>Active workers</small></div>)}</div>{!dashboard?.departments?.length&&<p className="empty-hint">No department data available yet.</p>}</article>}
 
