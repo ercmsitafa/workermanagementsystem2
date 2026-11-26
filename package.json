@@ -13,6 +13,7 @@
     "build": "cd client && npm run build",
     "start": "cd backend && npm run start",
     "dev:client": "cd client && npm run dev",
-    "build:client": "cd client && npm run build"
+    "build:client": "cd client && npm run build",
+    "dev": "npm run dev:backend"
   }
 }
