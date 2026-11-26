@@ -281,7 +281,7 @@ function App() {
 
         {page==='departments'&&<article className="panel departments-management"><div className="panel-heading"><div><h3>Department management</h3><p>Create departments, view teams, update details or remove empty departments.</p></div><button className="primary-btn" onClick={()=>setDepartmentModal({name:'',description:''})}><Plus size={16}/> Add department</button></div><div className="search-box department-search"><Search size={16}/><input placeholder="Search departments..." value={departmentQuery} onChange={e=>setDepartmentQuery(e.target.value)}/></div><div className="department-cards">{visibleDepartments.map(d=><div className="department-card" key={d.id}><Building2/><b>{d.name}</b><strong>{d.worker_count||0}</strong><small>Active workers</small><div className="department-actions"><button onClick={()=>openDepartment(d)}>View team</button><button onClick={()=>setDepartmentModal({id:d.id,name:d.name,description:d.description||''})}>Edit</button><button onClick={()=>deleteDepartment(d)}>Delete</button></div></div>)}</div>{!visibleDepartments.length&&<p className="empty-hint">No departments found. Add a department to get started.</p>}</article>}
 
-        {page==='attendance'&&<article className="panel"><div className="panel-heading"><div><h3>Attendance summary</h3><p>Today's attendance from your connected API</p></div><CalendarCheck/></div><div className="stats-grid inner-stats"><StatCard title="Present" value={attendance.present??'—'} note="Marked present" icon={Check} tone="green"/><StatCard title="Absent" value={attendance.absent??'—'} note="Marked absent" icon={X} tone="orange"/><StatCard title="On leave" value={attendance.leave??'—'} note="Approved leave" icon={Clock3} tone="purple"/></div><p className="muted">Attendance entries can be viewed and managed through the existing API. This dashboard currently displays the summary endpoint.</p></article>}
+        {page==='attendance'&&<AttendanceWorkspace workers={workers} onNotice={setNotice}/>}
 
         {page==='salaries'&&<article className="panel"><div className="panel-heading"><div><h3>Salary overview</h3><p>Current month totals from dashboard records</p></div><Wallet/></div><div className="stats-grid inner-stats"><StatCard title="Base salary" value={dashboard?.salaries?.total_base!=null?money(dashboard.salaries.total_base):'—'} note="Monthly base total" icon={Wallet} tone="blue"/><StatCard title="Deductions" value={dashboard?.salaries?.total_deductions!=null?money(dashboard.salaries.total_deductions):'—'} note="Recorded deductions" icon={Activity} tone="orange"/><StatCard title="Net salary" value={dashboard?.salaries?.total_net!=null?money(dashboard.salaries.total_net):'—'} note="Monthly net total" icon={BriefcaseBusiness} tone="green"/></div></article>}
 
@@ -336,6 +336,90 @@ function SettingsPage({ dark, setDark, user, settings, setSettings, settingsLoad
       <div className="settings-section"><div><h4>Policies & notifications</h4><p>Control workflow options and operational safety.</p></div>{[['weekend_work','Allow weekend work'],['attendance_auto_mark','Automatic attendance marking'],['require_approval_leave','Require leave approval'],['allow_worker_self_registration','Allow worker self-registration'],['maintenance_mode','Maintenance mode']].map(([key,label])=><div className="setting-row compact-setting" key={key}><div><b>{label}</b><small>{key==='maintenance_mode'?'Restrict normal usage during planned maintenance.':'Configure this system workflow option.'}</small></div><button type="button" className={'toggle '+(Boolean(draft[key])?'on':'')} onClick={()=>change(key,!Boolean(draft[key]))} aria-label={label}><i/></button></div>)}</div>
       <div className="settings-actions"><button type="button" className="secondary-btn" onClick={()=>loadSettings()} disabled={settingsLoading}>Reset to saved <RefreshCw size={15}/></button><button className="primary-btn" disabled={saving||settingsLoading}>{saving?'Saving…':'Save system settings'} <Check size={16}/></button></div>
     </form> : <div className="empty-state"><ShieldCheck/><b>Administrator permissions required</b><span>Only administrators can change organization-wide settings.</span></div>}
+  </article>;
+}
+
+
+function AttendanceWorkspace({ workers, onNotice }) {
+  const today = new Date().toLocaleDateString('en-CA');
+  const [date, setDate] = useState(today);
+  const [records, setRecords] = useState([]);
+  const [statuses, setStatuses] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
+
+  async function loadAttendance() {
+    setLoading(true);
+    try {
+      const result = await apiRequest('/attendance?page=1&limit=200&startDate='+encodeURIComponent(date)+'&endDate='+encodeURIComponent(date));
+      const rows = result.data?.attendance || [];
+      setRecords(rows);
+      const next = {};
+      rows.forEach(row => { next[String(row.worker_id)] = row.status; });
+      setStatuses(next);
+    } catch (err) { onNotice(err.message || 'Could not load attendance'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { loadAttendance(); }, [date]);
+
+  const activeWorkers = workers.filter(worker => (worker.status || 'active') === 'active');
+  const rows = activeWorkers.filter(worker => {
+    const text = (worker.first_name+' '+worker.last_name+' '+(worker.email||'')).toLowerCase();
+    const statusValue = statuses[String(worker.id)] || 'unmarked';
+    return (!search || text.includes(search.toLowerCase())) && (filter === 'all' || statusValue === filter);
+  });
+  const count = statusValue => activeWorkers.filter(worker => (statuses[String(worker.id)] || 'unmarked') === statusValue).length;
+
+  async function saveAttendance() {
+    if (!activeWorkers.length) { onNotice('There are no active workers to mark.'); return; }
+    setSaving(true);
+    try {
+      const payload = activeWorkers.map(worker => ({ worker_id: Number(worker.id), record_status: statuses[String(worker.id)] || 'present' }));
+      const result = await apiRequest('/attendance/bulk', { method:'POST', body:JSON.stringify({ date, records:payload }) });
+      onNotice(result.message || 'Attendance saved.');
+      await loadAttendance();
+    } catch (err) { onNotice(err.message || 'Could not save attendance'); }
+    finally { setSaving(false); }
+  }
+  function markAll(statusValue) {
+    const next = { ...statuses };
+    activeWorkers.forEach(worker => { next[String(worker.id)] = statusValue; });
+    setStatuses(next);
+  }
+
+  return <article className="panel attendance-workspace">
+    <div className="panel-heading"><div><h3>Daily attendance</h3><p>Record, review and update attendance for your active workforce.</p></div><CalendarCheck size={21}/></div>
+    <div className="stats-grid inner-stats attendance-stats">
+      <StatCard title="Present" value={count('present')} note="Marked present" icon={Check} tone="green"/>
+      <StatCard title="Absent" value={count('absent')} note="Marked absent" icon={X} tone="orange"/>
+      <StatCard title="On leave" value={count('leave')} note="Marked on leave" icon={Clock3} tone="purple"/>
+      <StatCard title="Unmarked" value={count('unmarked')} note="Awaiting a status" icon={Users} tone="blue"/>
+    </div>
+    <div className="attendance-toolbar">
+      <label className="attendance-date">Attendance date<input type="date" value={date} max={today} onChange={event=>setDate(event.target.value)}/></label>
+      <div className="search-box attendance-search"><Search size={16}/><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search workers..."/></div>
+      <select value={filter} onChange={event=>setFilter(event.target.value)} aria-label="Filter attendance status">
+        <option value="all">All statuses</option><option value="present">Present</option><option value="absent">Absent</option><option value="leave">On leave</option><option value="unmarked">Unmarked</option>
+      </select>
+      <button className="secondary-btn" onClick={loadAttendance} disabled={loading}><RefreshCw size={15}/> Refresh</button>
+    </div>
+    <div className="attendance-bulk-actions">
+      <button className="secondary-btn" onClick={()=>markAll('present')}>Mark all present</button>
+      <button className="secondary-btn" onClick={()=>markAll('absent')}>Mark all absent</button>
+      <button className="secondary-btn" onClick={()=>markAll('leave')}>Mark all on leave</button>
+      <span>{records.length} saved records · {activeWorkers.length} active workers</span>
+    </div>
+    {loading ? <p className="empty-hint">Loading attendance…</p> : rows.length ? <div className="table-wrap"><table><thead><tr><th>Worker</th><th>Department</th><th>Attendance status</th><th>Record</th></tr></thead><tbody>
+      {rows.map(worker => { const value=statuses[String(worker.id)] || 'present'; const saved=records.some(record=>String(record.worker_id)===String(worker.id)); return <tr key={worker.id}>
+        <td><div className="worker-cell"><div className="worker-avatar">{(worker.first_name||'?').slice(0,1)}{(worker.last_name||'').slice(0,1)}</div><div><b>{worker.first_name} {worker.last_name}</b><small>{worker.email||'—'}</small></div></div></td>
+        <td>{worker.department_name||'Unassigned'}</td>
+        <td><select className="attendance-status-select" value={value} onChange={event=>setStatuses(current=>({...current,[String(worker.id)]:event.target.value}))}><option value="present">Present</option><option value="absent">Absent</option><option value="leave">On leave</option></select></td>
+        <td><span className={'status-pill '+(saved?'active':'inactive')}><i/>{saved?'Saved':'New'}</span></td>
+      </tr>; })}
+    </tbody></table></div> : <div className="empty-state"><Users size={26}/><b>No workers match this filter</b><span>Try another search or attendance status.</span></div>}
+    <div className="attendance-save-row"><span>Changes are saved for the selected date.</span><button className="primary-btn" onClick={saveAttendance} disabled={saving||loading}>{saving?'Saving…':'Save attendance'} <Check size={16}/></button></div>
   </article>;
 }
 
