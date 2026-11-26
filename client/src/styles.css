@@ -20,3 +20,16 @@
 /* Department management */
 .department-search{max-width:440px;margin:0 0 18px}.department-cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.department-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.department-actions button{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:7px;padding:6px 9px;font-size:10px}.department-actions button:hover{color:var(--accent);border-color:var(--accent)}.departments-management .panel-heading{align-items:center}.departments-management textarea{font:inherit;border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--text);padding:10px;resize:vertical;width:100%}.departments-management label,.modal-card label{display:grid;gap:7px;font-size:11px;color:var(--muted);margin:10px 0}.departments-management input,.modal-card input,.modal-card select{border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--text);padding:10px;width:100%;font-size:12px}.department-card{min-width:0}.department-card strong{font:800 25px Manrope}.department-card small{color:var(--muted)}.profile-modal .inner-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin:16px 0}.profile-modal h4{font:700 13px Manrope;margin:18px 0 10px}
 @media(max-width:620px){.departments-management .panel-heading{align-items:flex-start;flex-direction:column}.profile-modal .inner-stats{grid-template-columns:1fr}}
+
+
+/* Attendance Management 2.0 */
+.attendance-workspace{display:flex;flex-direction:column;gap:20px}
+.attendance-toolbar,.attendance-bulk-actions,.attendance-save-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.attendance-date{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:650;color:var(--muted)}
+.attendance-date input,.attendance-toolbar select,.attendance-status-select{min-height:40px;border:1px solid var(--border);border-radius:10px;padding:0 11px;background:var(--surface);color:var(--text);font:inherit}
+.attendance-search{flex:1;min-width:190px}
+.attendance-bulk-actions{padding:13px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.attendance-bulk-actions>span,.attendance-save-row>span{margin-left:auto;color:var(--muted);font-size:12px}
+.attendance-status-select{min-width:130px}
+.attendance-save-row{justify-content:space-between;padding-top:4px}
+@media(max-width:700px){.attendance-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.attendance-search{flex-basis:100%}.attendance-bulk-actions>span{width:100%;margin-left:0}.attendance-save-row{align-items:stretch;flex-direction:column}.attendance-save-row>span{margin:0}.attendance-save-row .primary-btn{width:100%;justify-content:center}}
