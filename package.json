@@ -5,12 +5,15 @@
   "private": true,
   "workspaces": [
     "backend",
-    "frontend"
+    "client"
   ],
   "scripts": {
     "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build",
-    "start": "cd backend && npm run start"
+    "dev:frontend": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "cd backend && npm run start",
+    "dev:client": "cd client && npm run dev",
+    "build:client": "cd client && npm run build",
+    "dev": "npm run dev:backend"
   }
 }

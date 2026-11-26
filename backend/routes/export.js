@@ -136,7 +136,7 @@ router.get('/salaries/excel', verifyToken, async (req, res) => {
 
     if (month && year) {
       whereClause += ' AND MONTH(s.month) = ? AND YEAR(s.month) = ?';
-      params.push(parseInt(month), parseInt(year));
+      params.push(String(month).padStart(2, '0'), String(year));
     }
 
     if (department_id) {
@@ -146,7 +146,7 @@ router.get('/salaries/excel', verifyToken, async (req, res) => {
 
     const salaries = await executeQuery(`
       SELECT s.*, w.first_name, w.last_name, w.email, w.position, d.name as department_name
-      FROM salaries s
+      FROM salary s
       JOIN workers w ON s.worker_id = w.id
       LEFT JOIN departments d ON w.department_id = d.id
       WHERE ${whereClause}
@@ -203,6 +203,8 @@ router.get('/report/pdf', verifyToken, async (req, res) => {
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
     doc.moveDown(2);
 
+    const currencySetting = await getSingleRow("SELECT value FROM settings WHERE key = 'currency'");
+    const currency = currencySetting.data?.value || 'RWF';
     // Worker summary
     const workerStats = await getSingleRow(`
       SELECT 
@@ -217,8 +219,8 @@ router.get('/report/pdf', verifyToken, async (req, res) => {
     doc.moveDown(0.5);
     doc.fontSize(11).text(`Total Workers: ${workerStats.data?.total || 0}`);
     doc.text(`Active Workers: ${workerStats.data?.active || 0}`);
-    doc.text(`Total Monthly Payroll: $${(workerStats.data?.total_salary || 0).toLocaleString()}`);
-    doc.text(`Average Salary: $${(workerStats.data?.avg_salary || 0).toLocaleString()}`);
+    doc.text(`Total Monthly Payroll: ${currency} ${(workerStats.data?.total_salary || 0).toLocaleString()}`);
+    doc.text(`Average Salary: ${currency} ${(workerStats.data?.avg_salary || 0).toLocaleString()}`);
     doc.moveDown(2);
 
     // Department summary
@@ -234,7 +236,7 @@ router.get('/report/pdf', verifyToken, async (req, res) => {
     doc.moveDown(0.5);
     doc.fontSize(11);
     departments.data.forEach(dept => {
-      doc.text(`${dept.name}: ${dept.worker_count} workers, $${(dept.total_salary || 0).toLocaleString()}`);
+      doc.text(`${dept.name}: ${dept.worker_count} workers, ${currency} ${(dept.total_salary || 0).toLocaleString()}`);
     });
     doc.moveDown(2);
 
@@ -245,7 +247,7 @@ router.get('/report/pdf', verifyToken, async (req, res) => {
         SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent,
         SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as leave
       FROM attendance
-      WHERE date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+      WHERE date >= date('now', '-30 days')
     `);
 
     doc.fontSize(14).text('Attendance Summary (Last 30 Days)', { underline: true });
